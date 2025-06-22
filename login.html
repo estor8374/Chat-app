@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login with Phone</title>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    input, button { padding: 10px; width: 300px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h2>📱 Phone Login</h2>
+  <div id="step1">
+    <input type="text" id="phone" placeholder="+91XXXXXXXXXX" />
+    <div id="recaptcha-container"></div>
+    <button onclick="sendOTP()">Send OTP</button>
+  </div>
+
+  <div id="step2" style="display:none;">
+    <input type="text" id="otp" placeholder="Enter OTP" />
+    <button onclick="verifyOTP()">Verify OTP</button>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCBP-uiChoUl6DExnwc9xvrCMj9Sbj72sg",
+      authDomain: "chat-ee464.firebaseapp.com",
+      databaseURL: "https://chat-ee464-default-rtdb.firebaseio.com",
+      projectId: "chat-ee464",
+      storageBucket: "chat-ee464.firebasestorage.app",
+      messagingSenderId: "967011465942",
+      appId: "1:967011465942:web:83b030b334275afc4c6777"
+    };
+    firebase.initializeApp(firebaseConfig);
+
+    let confirmationResult;
+
+    window.onload = () => {
+      window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+        size: 'normal',
+        callback: (response) => { console.log("reCAPTCHA verified"); }
+      });
+      recaptchaVerifier.render();
+    };
+
+    function sendOTP() {
+      const phoneNumber = document.getElementById('phone').value.trim();
+      if (!phoneNumber.startsWith('+')) {
+        alert("Use full number with country code, like +91...");
+        return;
+      }
+
+      firebase.auth().signInWithPhoneNumber(phoneNumber, window.recaptchaVerifier)
+        .then((result) => {
+          confirmationResult = result;
+          document.getElementById('step1').style.display = "none";
+          document.getElementById('step2').style.display = "block";
+        })
+        .catch((error) => {
+          alert("OTP send failed: " + error.message);
+        });
+    }
+
+    function verifyOTP() {
+      const otpCode = document.getElementById('otp').value.trim();
+      confirmationResult.confirm(otpCode).then((result) => {
+        const user = result.user;
+        localStorage.setItem("chat_uid", user.uid);
+        localStorage.setItem("chat_phone", user.phoneNumber);
+
+        // Save to Firebase DB
+        firebase.database().ref("users/" + user.uid).set({
+          phone: user.phoneNumber
+        });
+
+        window.location.href = "friendlist.html"; // Next Step
+      }).catch((error) => {
+        alert("Incorrect OTP");
+      });
+    }
+  </script>
+</body>
+</html>

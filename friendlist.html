@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Friend List</title>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    .box { border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 8px; background: #f9f9f9; }
+    .btn { padding: 5px 10px; margin-left: 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h2>👥 Friend System</h2>
+  <h4 id="user-info"></h4>
+
+  <h3>All Users:</h3>
+  <div id="user-list"></div>
+
+  <h3>My Friends:</h3>
+  <div id="friend-list"></div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCBP-uiChoUl6DExnwc9xvrCMj9Sbj72sg",
+      authDomain: "chat-ee464.firebaseapp.com",
+      databaseURL: "https://chat-ee464-default-rtdb.firebaseio.com",
+      projectId: "chat-ee464",
+      storageBucket: "chat-ee464.firebasestorage.app",
+      messagingSenderId: "967011465942",
+      appId: "1:967011465942:web:83b030b334275afc4c6777"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const uid = localStorage.getItem("chat_uid");
+    const name = localStorage.getItem("chat_name");
+    document.getElementById("user-info").innerText = "Logged in as: " + name;
+
+    const userListDiv = document.getElementById("user-list");
+    const friendListDiv = document.getElementById("friend-list");
+
+    // Show all other users
+    db.ref("users").on("value", snapshot => {
+      userListDiv.innerHTML = "";
+      snapshot.forEach(child => {
+        const data = child.val();
+        const otherUid = child.key;
+
+        if (otherUid !== uid) {
+          const box = document.createElement("div");
+          box.classList.add("box");
+          box.innerHTML = `<b>${data.name}</b> (${data.email})`;
+
+          // Friend request/send buttons
+          db.ref(`friend_requests/${uid}/${otherUid}`).once("value", req => {
+            const status = req.val();
+
+            if (status === "accepted") {
+              box.innerHTML += " ✅ Friend";
+            } else if (status === "pending") {
+              box.innerHTML += " ⏳ Request Sent";
+            } else {
+              const btn = document.createElement("button");
+              btn.classList.add("btn");
+              btn.innerText = "Add Friend";
+              btn.onclick = () => {
+                db.ref(`friend_requests/${uid}/${otherUid}`).set("pending");
+                db.ref(`friend_requests/${otherUid}/${uid}`).set("request_received");
+              };
+              box.appendChild(btn);
+            }
+          });
+
+          // Accept Request Option
+          db.ref(`friend_requests/${otherUid}/${uid}`).once("value", req => {
+            if (req.val() === "request_received") {
+              const acceptBtn = document.createElement("button");
+              acceptBtn.classList.add("btn");
+              acceptBtn.innerText = "Accept";
+              acceptBtn.onclick = () => {
+                db.ref(`friend_requests/${uid}/${otherUid}`).set("accepted");
+                db.ref(`friend_requests/${otherUid}/${uid}`).set("accepted");
+              };
+              box.appendChild(acceptBtn);
+            }
+          });
+
+          userListDiv.appendChild(box);
+        }
+      });
+    });
+
+    // Show accepted friends
+    db.ref(`friend_requests/${uid}`).on("value", snapshot => {
+      friendListDiv.innerHTML = "";
+      snapshot.forEach(child => {
+        if (child.val() === "accepted") {
+          const fid = child.key;
+          db.ref("users/" + fid).once("value", snap => {
+            const friend = snap.val();
+            const box = document.createElement("div");
+            box.classList.add("box");
+            box.innerHTML = `<b>${friend.name}</b> (${friend.email})`;
+            friendListDiv.appendChild(box);
+          });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

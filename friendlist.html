@@ -4,26 +4,22 @@
   <title>Friend System</title>
   <style>
     body { font-family: Arial; padding: 20px; }
-    button { margin: 5px; }
-    .tab { margin: 10px 0; }
+    button { margin: 5px; padding: 6px 12px; }
+    #content div { margin-bottom: 10px; }
   </style>
 </head>
 <body>
   <h3>👥 Friend System</h3>
-  <p>Logged in as: <span id="username">Loading...</span></p>
+  <p>Logged in as: <b id="userName">Loading...</b></p>
+  <button onclick="showAllUsers()">All Users</button>
+  <button onclick="showMyFriends()">My Friends</button>
+  <label style="float:right;">
+    <input type="checkbox" id="notifToggle" onchange="toggleNotif(this.checked)"> ⚠️ Enable Notifications
+  </label>
+  <hr>
+  <div id="content">Loading...</div>
 
-  <div class="tab">
-    <button onclick="showAllUsers()">All Users</button>
-    <button onclick="showMyFriends()">My Friends</button>
-    <label style="float:right;">
-      <input type="checkbox" id="notifyToggle" onchange="toggleNotifications(this)">
-      ⚠️ Enable Notifications
-    </label>
-  </div>
-
-  <div id="content"></div>
-
-  <!-- Firebase -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
@@ -42,65 +38,72 @@
 
     const uid = localStorage.getItem("chat_uid");
     const name = localStorage.getItem("chat_name");
+    const email = localStorage.getItem("chat_email");
 
-    document.getElementById("username").innerText = name || "Unknown";
+    if (!uid || !email) {
+      alert("User not logged in!");
+      window.location.href = "index.html";
+    }
+
+    document.getElementById("userName").innerText = name;
 
     function showAllUsers() {
       const content = document.getElementById("content");
       content.innerHTML = "<h4>All Users</h4>";
 
-      firebase.database().ref("users").once("value").then(snapshot => {
-        const users = snapshot.val();
-        for (let id in users) {
-          if (id !== uid) {
-            const user = users[id];
-            const div = document.createElement("div");
-            div.innerHTML = `<b>${user.name}</b> (${user.email}) <button onclick="addFriend('${id}')">Add Friend</button>`;
-            content.appendChild(div);
+      firebase.database().ref("users").once("value")
+        .then(snapshot => {
+          const users = snapshot.val();
+          let found = false;
+          for (let id in users) {
+            if (id !== uid) {
+              found = true;
+              const user = users[id];
+              const div = document.createElement("div");
+              div.innerHTML = `<b>${user.name || 'No Name'}</b> (${user.email || ''})
+                <button onclick="addFriend('${id}')">Add Friend</button>`;
+              content.appendChild(div);
+            }
           }
-        }
-      });
+          if (!found) content.innerHTML += "<p>😐 No other users found.</p>";
+        });
     }
 
     function showMyFriends() {
       const content = document.getElementById("content");
       content.innerHTML = "<h4>My Friends</h4>";
 
-      firebase.database().ref("friends/" + uid).once("value").then(snapshot => {
-        const friends = snapshot.val();
-        if (!friends) {
-          content.innerHTML += "<p>No friends found.</p>";
-          return;
-        }
-        for (let fid in friends) {
-          firebase.database().ref("users/" + fid).once("value").then(userSnap => {
-            const user = userSnap.val();
-            const div = document.createElement("div");
-            div.innerHTML = `<b>${user.name}</b> (${user.email})`;
-            content.appendChild(div);
-          });
-        }
-      });
+      firebase.database().ref("friends/" + uid).once("value")
+        .then(snapshot => {
+          const friends = snapshot.val();
+          if (!friends) {
+            content.innerHTML += "<p>😢 No friends found.</p>";
+            return;
+          }
+
+          for (let fid in friends) {
+            firebase.database().ref("users/" + fid).once("value")
+              .then(snap => {
+                const friend = snap.val();
+                const div = document.createElement("div");
+                div.innerHTML = `<b>${friend?.name || 'Unknown'}</b> (${friend?.email || ''})`;
+                content.appendChild(div);
+              });
+          }
+        });
     }
 
-    function addFriend(friendUid) {
-      const myRef = firebase.database().ref("friends/" + uid + "/" + friendUid);
-      const theirRef = firebase.database().ref("friends/" + friendUid + "/" + uid);
-      myRef.set(true);
-      theirRef.set(true);
-      alert("Friend added!");
+    function addFriend(friendId) {
+      firebase.database().ref("friends/" + uid + "/" + friendId).set(true)
+        .then(() => alert("✅ Friend added!"));
     }
 
-    function toggleNotifications(checkbox) {
-      if (checkbox.checked) {
-        alert("Notifications enabled.");
-      } else {
-        alert("Notifications disabled.");
-      }
+    function toggleNotif(enabled) {
+      localStorage.setItem("chat_notif", enabled ? "on" : "off");
     }
 
-    // Optional: Load All Users by default
-    window.onload = showAllUsers;
+    // Default to all users
+    showAllUsers();
   </script>
 </body>
 </html>

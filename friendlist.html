@@ -4,25 +4,83 @@
   <title>Friend List</title>
   <style>
     body { font-family: Arial; padding: 20px; }
-    .box { border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 8px; background: #f9f9f9; }
-    .btn { padding: 5px 10px; margin-left: 10px; cursor: pointer; }
+    .tab-btn {
+      padding: 10px 20px;
+      border: none;
+      cursor: pointer;
+      margin-right: 10px;
+      background-color: #eee;
+      border-radius: 5px;
+    }
+    .tab-btn.active {
+      background-color: #2196F3;
+      color: white;
+    }
+    .section {
+      display: none;
+      margin-top: 20px;
+    }
+    .box {
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+      background: #f9f9f9;
+    }
+    .btn {
+      padding: 5px 10px;
+      margin-left: 10px;
+      cursor: pointer;
+    }
+    #notif {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #2196F3;
+      color: white;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      cursor: pointer;
+      display: none;
+    }
   </style>
 </head>
 <body>
   <h2>👥 Friend System</h2>
   <h4 id="user-info"></h4>
 
-  <h3>All Users:</h3>
-  <div id="user-list"></div>
+  <!-- Notification Toggle -->
+  <div style="text-align: right; margin-bottom: 10px;">
+    <label>
+      <input type="checkbox" id="notifToggle" onchange="toggleNotif()" />
+      🔔 Enable Notifications
+    </label>
+  </div>
 
-  <h3>My Friends:</h3>
-  <div id="friend-list"></div>
+  <!-- Tabs -->
+  <div>
+    <button class="tab-btn active" onclick="showTab('all')">All Users</button>
+    <button class="tab-btn" onclick="showTab('friends')">My Friends</button>
+  </div>
+
+  <!-- Sections -->
+  <div id="all" class="section" style="display:block;">
+    <h3>All Users</h3>
+    <div id="user-list"></div>
+  </div>
+
+  <div id="friends" class="section">
+    <h3>My Friends</h3>
+    <div id="friend-list"></div>
+  </div>
+
+  <!-- Notification Popup -->
+  <div id="notif" onclick="goToChat()"></div>
 
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
-
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyCBP-uiChoUl6DExnwc9xvrCMj9Sbj72sg",
@@ -43,7 +101,22 @@
     const userListDiv = document.getElementById("user-list");
     const friendListDiv = document.getElementById("friend-list");
 
-    // Show all other users
+    // 🔁 Tab Control
+    function showTab(tabId) {
+      document.querySelectorAll(".section").forEach(s => s.style.display = "none");
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.getElementById(tabId).style.display = "block";
+      event.target.classList.add("active");
+    }
+
+    // 🔁 Notification Toggle
+    const notifToggle = document.getElementById("notifToggle");
+    if (localStorage.getItem("notif_enabled") === "true") notifToggle.checked = true;
+    function toggleNotif() {
+      localStorage.setItem("notif_enabled", notifToggle.checked ? "true" : "false");
+    }
+
+    // 🔄 Load All Users
     db.ref("users").on("value", snapshot => {
       userListDiv.innerHTML = "";
       snapshot.forEach(child => {
@@ -55,12 +128,18 @@
           box.classList.add("box");
           box.innerHTML = `<b>${data.name}</b> (${data.email})`;
 
-          // Friend request/send buttons
           db.ref(`friend_requests/${uid}/${otherUid}`).once("value", req => {
             const status = req.val();
 
             if (status === "accepted") {
               box.innerHTML += " ✅ Friend";
+              const btn = document.createElement("button");
+              btn.classList.add("btn");
+              btn.innerText = "Chat";
+              btn.onclick = () => {
+                window.location.href = `chat.html?uid=${otherUid}`;
+              };
+              box.appendChild(btn);
             } else if (status === "pending") {
               box.innerHTML += " ⏳ Request Sent";
             } else {
@@ -75,7 +154,6 @@
             }
           });
 
-          // Accept Request Option
           db.ref(`friend_requests/${otherUid}/${uid}`).once("value", req => {
             if (req.val() === "request_received") {
               const acceptBtn = document.createElement("button");
@@ -94,7 +172,7 @@
       });
     });
 
-    // Show accepted friends
+    // 🔄 Load My Friends
     db.ref(`friend_requests/${uid}`).on("value", snapshot => {
       friendListDiv.innerHTML = "";
       snapshot.forEach(child => {
@@ -105,11 +183,52 @@
             const box = document.createElement("div");
             box.classList.add("box");
             box.innerHTML = `<b>${friend.name}</b> (${friend.email})`;
+
+            const btn = document.createElement("button");
+            btn.classList.add("btn");
+            btn.innerText = "Chat";
+            btn.onclick = () => {
+              window.location.href = `chat.html?uid=${fid}`;
+            };
+            box.appendChild(btn);
+
             friendListDiv.appendChild(box);
           });
         }
       });
     });
+
+    // 🔔 Real-time In-App Notification
+    let lastNotified = "";
+    db.ref("messages").on("child_added", snapshot => {
+      const chatId = snapshot.key;
+      snapshot.ref.on("child_added", msgSnap => {
+        const msg = msgSnap.val();
+        const enabled = localStorage.getItem("notif_enabled");
+
+        if (enabled === "true" && msg.to === uid && !msg.seen && lastNotified !== msgSnap.key) {
+          lastNotified = msgSnap.key;
+          db.ref("users/" + msg.from).once("value", snap => {
+            const sender = snap.val();
+            if (sender) {
+              const note = document.getElementById("notif");
+              note.innerText = `${sender.name}: ${msg.text}`;
+              note.style.display = "block";
+              note.setAttribute("data-from", msg.from);
+              setTimeout(() => { note.style.display = "none"; }, 8000);
+            }
+          });
+        }
+      });
+    });
+
+    // Go to Chat
+    function goToChat() {
+      const fromUid = document.getElementById("notif").getAttribute("data-from");
+      if (fromUid) {
+        window.location.href = `chat.html?uid=${fromUid}`;
+      }
+    }
   </script>
 </body>
 </html>

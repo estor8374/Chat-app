@@ -6,6 +6,7 @@
     body { font-family: Arial; padding: 20px; }
     button { margin: 5px; padding: 6px 12px; }
     #content div { margin-bottom: 10px; }
+    a { text-decoration: none; color: blue; }
   </style>
 </head>
 <body>
@@ -86,7 +87,10 @@
               .then(snap => {
                 const friend = snap.val();
                 const div = document.createElement("div");
-                div.innerHTML = `<b>${friend?.name || 'Unknown'}</b> (${friend?.email || ''})`;
+                div.innerHTML = `
+                  <b><a href="chat.html?uid=${fid}">${friend?.name || 'Unknown'}</a></b>
+                  (${friend?.email || ''})
+                `;
                 content.appendChild(div);
               });
           }
@@ -102,7 +106,7 @@
       localStorage.setItem("chat_notif", enabled ? "on" : "off");
     }
 
-    // Default to all users
+    // Load All Users by default
     showAllUsers();
   </script>
 </body>
